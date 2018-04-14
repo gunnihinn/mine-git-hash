@@ -205,7 +205,7 @@ void* mine(void* setup_ptr)
         nonce += increment;
     }
 
-    return (void*)ret;
+    return ret;
 }
 
 int main(int argc, char** argv)
@@ -293,13 +293,12 @@ int main(int argc, char** argv)
         pthread_create(&pthreads[partition], NULL, mine, &setups[partition]);
     }
 
-    void* res;
-    struct Return* ret;
-    unsigned long long best_nonce;
-    int best_zeros;
+    void* res = NULL;
+    unsigned long long best_nonce = 0;
+    int best_zeros = 0;
     for (int partition = 0; partition < threads; partition++) {
         pthread_join(pthreads[partition], &res);
-        ret = (struct Return*)res;
+        struct Return *ret = (struct Return*)res;
         if (ret->zeros > best_zeros) {
             best_zeros = ret->zeros;
             best_nonce = ret->nonce;
