@@ -149,6 +149,44 @@ void signal_int(int signum)
     *keep_going = 0;
 }
 
+struct Setup {
+    char* head;
+    char* tail;
+    char* prefix;
+    int timeout;
+    int zeros;
+    int* best_zeros;
+    unsigned long long* best_nonce;
+};
+
+void mine(struct Setup setup)
+{
+    char* preamble = malloc(sizeof(char) * 256);
+    char* annotation = malloc(sizeof(char) * 256);
+    char* message = malloc(sizeof(char) * (strlen(setup.head) + strlen(setup.tail) + 1024));
+    unsigned char digest[SHA_DIGEST_LENGTH];
+    if (!(preamble && annotation && message)) {
+        perror("Failed to allocate memory for commit object");
+        exit(EXIT_FAILURE);
+    }
+
+    time_t start = time(NULL);
+    unsigned long long nonce = 0;
+    while (time(NULL) - start < setup.timeout && *(setup.best_zeros) < setup.zeros && *keep_going) {
+        size_t length = write_commit_object(nonce, setup.prefix, setup.head, setup.tail, &annotation, &preamble, &message);
+        SHA1(message, length, digest);
+
+        int zs = leading_zeros(digest);
+        if (zs > *(setup.best_zeros)) {
+            *(setup.best_zeros) = zs;
+            *(setup.best_nonce) = nonce;
+            fprintf(stderr, "Found %d zeros with nonce '%s %llu'\n", *(setup.best_zeros), setup.prefix, *(setup.best_nonce));
+        }
+
+        nonce++;
+    }
+}
+
 int main(int argc, char** argv)
 {
     keep_going = malloc(sizeof(int));
@@ -213,33 +251,20 @@ int main(int argc, char** argv)
         exit(EXIT_FAILURE);
     }
 
-    char* preamble = malloc(sizeof(char) * 256);
-    char* annotation = malloc(sizeof(char) * 256);
-    char* message = malloc(sizeof(char) * (sizeof(blob) + 1024));
-    unsigned char digest[SHA_DIGEST_LENGTH];
-    if (!(preamble && annotation && message)) {
-        perror("Failed to allocate memory for commit object");
-        exit(EXIT_FAILURE);
-    }
+    int best_zeros;
+    unsigned long long best_nonce;
 
-    int best_zeros = 0;
-    unsigned long long best_nonce = 0;
-    unsigned long long nonce = 0;
+    struct Setup setup = {
+        .head = head,
+        .tail = tail,
+        .prefix = prefix,
+        .timeout = timeout,
+        .zeros = zeros,
+        .best_zeros = &best_zeros,
+        .best_nonce = &best_nonce
+    };
 
-    time_t start = time(NULL);
-    while (time(NULL) - start < timeout && best_zeros < zeros && *keep_going) {
-        size_t length = write_commit_object(nonce, prefix, head, tail, &annotation, &preamble, &message);
-        SHA1(message, length, digest);
-
-        int zs = leading_zeros(digest);
-        if (zs > best_zeros) {
-            best_zeros = zs;
-            best_nonce = nonce;
-            fprintf(stderr, "Found %d zeros with nonce '%s %llu'\n", best_zeros, prefix, best_nonce);
-        }
-
-        nonce++;
-    }
+    mine(setup);
 
     if (!debug) {
         char* cmd = malloc(sizeof(char) * (strlen(prefix) + 256));
