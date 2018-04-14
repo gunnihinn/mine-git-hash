@@ -199,7 +199,7 @@ void* mine(void* setup_ptr)
         if (zs > ret->zeros) {
             ret->zeros = zs;
             ret->nonce = nonce;
-            fprintf(stderr, "Worker %d: Found %d zeros with nonce '%s %llu'\n", setup->partition + 1, ret->zeros, setup->prefix, ret->nonce);
+            fprintf(stderr, "Worker %d: Found %d zeros after %d seconds with nonce '%s %llu'\n", setup->partition + 1, ret->zeros, time(NULL) - start, setup->prefix, ret->nonce);
         }
 
         nonce += increment;
