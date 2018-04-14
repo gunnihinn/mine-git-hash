@@ -2,6 +2,7 @@
 
 #include <getopt.h>
 #include <openssl/sha.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@ OPTIONS:\n\
     -d          Debug mode; do not make any changes to the Git repo\n\
     -z=ZEROS    Number of leading zeros to look for. Default: 10\n\
     -t=SECONDS  Timeout. Default: 60 seconds\n\
+    -p=THREADS  Number of threads to use. Default: 1\n\
 ");
 }
 
@@ -155,36 +157,50 @@ struct Setup {
     char* prefix;
     int timeout;
     int zeros;
-    int* best_zeros;
-    unsigned long long* best_nonce;
+    int partition;
+    int threads;
 };
 
-void mine(struct Setup setup)
+struct Return {
+    int zeros;
+    unsigned long long nonce;
+};
+
+void* mine(void* setup_ptr)
 {
+    struct Setup* setup = (struct Setup*)setup_ptr;
+
     char* preamble = malloc(sizeof(char) * 256);
     char* annotation = malloc(sizeof(char) * 256);
-    char* message = malloc(sizeof(char) * (strlen(setup.head) + strlen(setup.tail) + 1024));
+    char* message = malloc(sizeof(char) * (strlen(setup->head) + strlen(setup->tail) + 1024));
     unsigned char digest[SHA_DIGEST_LENGTH];
     if (!(preamble && annotation && message)) {
         perror("Failed to allocate memory for commit object");
         exit(EXIT_FAILURE);
     }
 
+    struct Return* ret = malloc(sizeof(struct Return));
+    ret->zeros = 0;
+    ret->nonce = 0;
+    unsigned long long nonce = setup->partition;
+    int increment = setup->threads;
+
     time_t start = time(NULL);
-    unsigned long long nonce = 0;
-    while (time(NULL) - start < setup.timeout && *(setup.best_zeros) < setup.zeros && *keep_going) {
-        size_t length = write_commit_object(nonce, setup.prefix, setup.head, setup.tail, &annotation, &preamble, &message);
+    while (time(NULL) - start < setup->timeout && ret->zeros < setup->zeros && *keep_going) {
+        size_t length = write_commit_object(nonce, setup->prefix, setup->head, setup->tail, &annotation, &preamble, &message);
         SHA1(message, length, digest);
 
         int zs = leading_zeros(digest);
-        if (zs > *(setup.best_zeros)) {
-            *(setup.best_zeros) = zs;
-            *(setup.best_nonce) = nonce;
-            fprintf(stderr, "Found %d zeros with nonce '%s %llu'\n", *(setup.best_zeros), setup.prefix, *(setup.best_nonce));
+        if (zs > ret->zeros) {
+            ret->zeros = zs;
+            ret->nonce = nonce;
+            fprintf(stderr, "Worker %02d: Found %02d zeros with nonce '%s %llu'\n", setup->partition, ret->zeros, setup->prefix, ret->nonce);
         }
 
-        nonce++;
+        nonce += increment;
     }
+
+    return (void*)ret;
 }
 
 int main(int argc, char** argv)
@@ -197,8 +213,9 @@ int main(int argc, char** argv)
     int opt;
     int zeros = 10;
     int timeout = 60;
+    int threads = 1;
     int debug = 0;
-    while ((opt = getopt(argc, argv, "hdz:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "hdz:t:p:")) != -1) {
         switch (opt) {
         case 'h':
             print_help();
@@ -211,6 +228,9 @@ int main(int argc, char** argv)
             break;
         case 'd':
             debug = 1;
+            break;
+        case 'p':
+            threads = atoi(optarg);
             break;
         default:
             print_help();
@@ -251,22 +271,40 @@ int main(int argc, char** argv)
         exit(EXIT_FAILURE);
     }
 
-    int best_zeros;
-    unsigned long long best_nonce;
-
     struct Setup setup = {
         .head = head,
         .tail = tail,
         .prefix = prefix,
         .timeout = timeout,
         .zeros = zeros,
-        .best_zeros = &best_zeros,
-        .best_nonce = &best_nonce
+        .threads = threads
     };
 
-    mine(setup);
+    pthread_t pthreads[threads];
+    struct Setup setups[threads];
+    for (int partition = 0; partition < threads; partition++) {
+        setups[partition] = setup;
+        setups[partition].partition = partition;
+        pthread_create(&pthreads[partition], NULL, mine, &setups[partition]);
+    }
 
-    if (!debug) {
+    void* res;
+    struct Return* ret;
+    unsigned long long best_nonce;
+    int best_zeros;
+    for (int partition = 0; partition < threads; partition++) {
+        pthread_join(pthreads[partition], &res);
+        ret = (struct Return*)res;
+        if (ret->zeros > best_zeros) {
+            best_zeros = ret->zeros;
+            best_nonce = ret->nonce;
+        }
+    }
+
+    if (debug) {
+        printf("Best zeros: %d\n", best_zeros);
+        printf("Best nonce: %llu\n", best_nonce);
+    } else {
         char* cmd = malloc(sizeof(char) * (strlen(prefix) + 256));
         sprintf(cmd, "git-commit-annotate --annotate '%s %llu'", prefix, best_nonce);
         exit(system(cmd));

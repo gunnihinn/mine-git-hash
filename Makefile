@@ -5,7 +5,7 @@ test=test
 test_src=test.c
 
 CFLAGS=-std=c11
-LDFLAGS=-lssl -lcrypto
+LDFLAGS=-lssl -lcrypto -lpthread
 
 $(bin): $(src)
 	gcc $(LDFLAGS) $(CFLAGS) -O3 -o $(bin) $(src)
