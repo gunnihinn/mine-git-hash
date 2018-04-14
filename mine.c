@@ -27,6 +27,8 @@ OPTIONS:\n\
     -z=ZEROS    Number of leading zeros to look for. Default: 10\n\
     -t=SECONDS  Timeout. Default: 60 seconds\n\
     -p=THREADS  Number of threads to use. Default: 1\n\
+\n\
+A timeout of 0 seconds means there is no timeout.\n\
 ");
 }
 
@@ -182,11 +184,14 @@ void* mine(void* setup_ptr)
     struct Return* ret = malloc(sizeof(struct Return));
     ret->zeros = 0;
     ret->nonce = 0;
+
     unsigned long long nonce = setup->partition;
     int increment = setup->threads;
 
     time_t start = time(NULL);
-    while (time(NULL) - start < setup->timeout && ret->zeros < setup->zeros && *keep_going) {
+    while ((setup->timeout && time(NULL) - start < setup->timeout) &&\
+            ret->zeros < setup->zeros &&\
+            *keep_going) {
         size_t length = write_commit_object(nonce, setup->prefix, setup->head, setup->tail, &annotation, &preamble, &message);
         SHA1(message, length, digest);
 
@@ -194,7 +199,7 @@ void* mine(void* setup_ptr)
         if (zs > ret->zeros) {
             ret->zeros = zs;
             ret->nonce = nonce;
-            fprintf(stderr, "Worker %02d: Found %02d zeros with nonce '%s %llu'\n", setup->partition, ret->zeros, setup->prefix, ret->nonce);
+            fprintf(stderr, "Worker %d: Found %d zeros with nonce '%s %llu'\n", setup->partition + 1, ret->zeros, setup->prefix, ret->nonce);
         }
 
         nonce += increment;
