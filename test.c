@@ -1,6 +1,7 @@
 #include <tap.h>
 
-int main() {
+int main()
+{
     plan(1);
 
     ok(1, "1 is OK!");

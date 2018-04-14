@@ -9,7 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
-void print_help() {
+void print_help()
+{
     printf("mine-git-hash - Mine git commit hashes\n\
 \n\
 USE:\n\
@@ -27,13 +28,15 @@ OPTIONS:\n\
 ");
 }
 
-void copy(char** newblob, char* line, size_t length, size_t n) {
+void copy(char** newblob, char* line, size_t length, size_t n)
+{
     for (int i = 0; i < n; i++) {
-        (*newblob)[i+length] = line[i];
+        (*newblob)[i + length] = line[i];
     }
 }
 
-char *get_blob(FILE *fh) {
+char* get_blob(FILE* fh)
+{
     char* blob = NULL;
     size_t length = 0;
 
@@ -53,15 +56,16 @@ char *get_blob(FILE *fh) {
     return blob;
 }
 
-void split_blob(char *blob, char **head, char **tail) {
+void split_blob(char* blob, char** head, char** tail)
+{
     int i;
     for (i = 0; i < strlen(blob) - 1; i++) {
-        if (blob[i] == '\n' && blob[i+1] == '\n') {
+        if (blob[i] == '\n' && blob[i + 1] == '\n') {
             break;
         }
     }
 
-    char* nhead = malloc(sizeof(char) * (i+1));
+    char* nhead = malloc(sizeof(char) * (i + 1));
     if (!nhead) {
         return;
     }
@@ -77,14 +81,15 @@ void split_blob(char *blob, char **head, char **tail) {
         return;
     }
 
-    for (int j = i+2; j < strlen(blob); j++) {
-        ntail[j-i-2] = blob[j];
+    for (int j = i + 2; j < strlen(blob); j++) {
+        ntail[j - i - 2] = blob[j];
     }
     ntail[strlen(blob) - i] = '\0';
     *tail = ntail;
 }
 
-size_t write_commit_object(unsigned long long nonce, char* prefix, char* head, char* tail, char** annotation, char** preamble, char** message) {
+size_t write_commit_object(unsigned long long nonce, char* prefix, char* head, char* tail, char** annotation, char** preamble, char** message)
+{
     if (prefix) {
         sprintf(*annotation, "%s %llu", prefix, nonce);
     } else {
@@ -119,12 +124,14 @@ size_t write_commit_object(unsigned long long nonce, char* prefix, char* head, c
     return i;
 }
 
-int leading_zeros(unsigned char* digest) {
+int leading_zeros(unsigned char* digest)
+{
     int zeros = 0;
 
     for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
         if (digest[i] == 0) {
-            zeros++; zeros++;
+            zeros++;
+            zeros++;
         } else if ((digest[i] & 0xF0) == 0) {
             zeros++;
             break;
@@ -137,11 +144,13 @@ int leading_zeros(unsigned char* digest) {
 }
 
 int* keep_going;
-void signal_int(int signum) {
+void signal_int(int signum)
+{
     *keep_going = 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv)
+{
     keep_going = malloc(sizeof(int));
     *keep_going = 1;
 
@@ -153,21 +162,21 @@ int main(int argc, char **argv) {
     int debug = 0;
     while ((opt = getopt(argc, argv, "hdz:t:")) != -1) {
         switch (opt) {
-            case 'h':
-                print_help();
-                exit(EXIT_SUCCESS);
-            case 'z':
-                zeros = atoi(optarg);
-                break;
-            case 't':
-                timeout = atoi(optarg);
-                break;
-            case 'd':
-                debug = 1;
-                break;
-            default:
-                print_help();
-                exit(EXIT_FAILURE);
+        case 'h':
+            print_help();
+            exit(EXIT_SUCCESS);
+        case 'z':
+            zeros = atoi(optarg);
+            break;
+        case 't':
+            timeout = atoi(optarg);
+            break;
+        case 'd':
+            debug = 1;
+            break;
+        default:
+            print_help();
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -177,7 +186,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char *prefix = argv[optind];
+    char* prefix = argv[optind];
 
     FILE* fh = popen("git cat-file commit HEAD", "r");
     if (!fh) {

@@ -13,6 +13,9 @@ $(bin): $(src)
 install: $(bin)
 	install $(bin) ${HOME}/.local/bin
 
+format: $(wildcard *.c)
+	clang-format -i -style=WebKit *.c
+
 .PHONY: debug
 debug:
 	gcc $(LDFLAGS) $(CFLAGS) -g -O0 -o $(bin) $(src)
